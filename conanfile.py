@@ -1,77 +1,97 @@
-from conans import ConanFile, CMake
-from conans.errors import ConanInvalidConfiguration
-from conans.tools import Version, check_min_cppstd, load
+from conan import ConanFile
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.build import check_min_cppstd
+from conan.errors import ConanInvalidConfiguration
+from conan.tools.files import get, load
 import re
-
-
-def get_version():
-    try:
-        content = load("CMakeLists.txt")
-        version = re.search(r"^\s*project\(ozo\s+VERSION\s+([^\s)]+)", content, re.M).group(1)
-        return version.strip()
-    except Exception:
-        return None
 
 
 class OzoConan(ConanFile):
     name = "ozo"
-    version = get_version()
     license = "PostgreSQL"
     topics = ("ozo", "yandex", "postgres", "postgresql", "cpp17", "database", "db", "asio")
-    url = "https://github.com/yandex/ozo"
+    url = "https://github.com/erkankayaabex/ozo"
     description = "Conan package for yandex ozo"
-    settings = "os", "compiler"
-
-    exports_sources = "include/*", "CMakeLists.txt", "cmake/*", "LICENCE", "AUTHORS"
-
-    generators = "cmake_find_package"
-    requires = ("boost/1.74.0", "resource_pool/0.1.0", "libpq/13.1")
-
-    def _configure_cmake(self):
+    settings = "os", "compiler", "build_type", "arch"
+    
+    # Tag, branch, or full commit SHA
+    _commit = "master"
+    
+    def set_version(self):
+        short = self._commit[:7] if len(self._commit) > 20 else self._commit
+        self.version = f"abex.{short}"
+    
+    def source(self):
+        get(self,
+            f"https://github.com/erkankayaabex/ozo/archive/{self._commit}.zip",
+            strip_root=True)
+    
+    def layout(self):
+        cmake_layout(self)
+    
+    def validate(self):
+        if self.settings.os == "Windows":
+            raise ConanInvalidConfiguration("OZO is not compatible with Windows")
+        check_min_cppstd(self, "17")
+    
+    def generate(self):
+        tc = CMakeToolchain(self)
+        tc.generate()
+        deps = CMakeDeps(self)
+        deps.generate()
+    
+    def build(self):
         cmake = CMake(self)
         cmake.configure()
-        return cmake
-
-    def configure(self):
-        if self.settings.os == "Windows":
-            raise ConanInvalidConfiguration("OZO is not compatible with Winows")
-        if self.settings.compiler.get_safe("cppstd"):
-            check_min_cppstd(self, "17")
-
-    def build(self):
-        cmake = self._configure_cmake()
         cmake.build()
-
+    
     def package(self):
-        cmake = self._configure_cmake()
+        cmake = CMake(self)
         cmake.install()
-
+    
+    def requirements(self):
+        self.requires("boost/1.88.0")
+        self.requires("resource_pool/0.1.0", headers=True, libs=False)
+        self.requires("libpq/15.5")
+    
     def package_id(self):
-        self.info.header_only()
-
+        del self.info.settings.build_type
+        del self.info.settings.compiler
+    
     def package_info(self):
+        self.cpp_info.bindirs = []
+        self.cpp_info.libdirs = []
+        
         self.cpp_info.components["_ozo"].includedirs = ["include"]
-        self.cpp_info.components["_ozo"].requires = ["boost::boost", "boost::system", "boost::thread", "boost::coroutine",
-                                                     "resource_pool::resource_pool", # == elsid::resource_pool in cmake
-                                                     "libpq::pq",                    # == PostgreSQL::PostgreSQL in cmake
-                                                     ]
+        self.cpp_info.components["_ozo"].requires = [
+            "boost::boost",
+            "boost::system",
+            "boost::thread",
+            "boost::coroutine",
+            "resource_pool::resource_pool",
+            "libpq::pq",
+        ]
         self.cpp_info.components["_ozo"].defines = [
             "BOOST_COROUTINES_NO_DEPRECATION_WARNING",
             "BOOST_HANA_CONFIG_ENABLE_STRING_UDL",
-            "BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT"
+            "BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT",
         ]
-
+        
         compiler = self.settings.compiler
-        version = Version(compiler.version)
-        if compiler == "clang" or compiler == "apple-clang" or (compiler == "gcc" and version >= 9):
+        if compiler in ("clang", "apple-clang") or (compiler == "gcc" and int(str(self.settings.compiler.version).split('.')[0]) >= 9):
             self.cpp_info.components["_ozo"].cxxflags = [
                 "-Wno-gnu-string-literal-operator-template",
                 "-Wno-gnu-zero-variadic-macro-arguments",
             ]
-
+        
         self.cpp_info.filenames["cmake_find_package"] = "ozo"
         self.cpp_info.filenames["cmake_find_package_multi"] = "ozo"
         self.cpp_info.names["cmake_find_package"] = "yandex"
         self.cpp_info.names["cmake_find_package_multi"] = "yandex"
         self.cpp_info.components["_ozo"].names["cmake_find_package"] = "ozo"
         self.cpp_info.components["_ozo"].names["cmake_find_package_multi"] = "ozo"
+    
+    def compatibility(self):
+        return [
+            {"settings": [("build_type", None), ("compiler", None)]},
+        ]
