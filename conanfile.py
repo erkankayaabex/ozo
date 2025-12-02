@@ -15,10 +15,15 @@ class OzoConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     
     # Tag, branch, or full commit SHA
+    _commit = "f5fae17"
+    
+    def set_version(self):
+        short = self._commit[:7] if len(self._commit) > 20 else self._commit
+        self.version = f"abex.{short}"
     
     def source(self):
         get(self,
-            f"https://github.com/erkankayaabex/ozo/archive/{self.version}.zip",
+            f"https://github.com/erkankayaabex/ozo/archive/{self._commit}.zip",
             strip_root=True)
     
     def layout(self):
