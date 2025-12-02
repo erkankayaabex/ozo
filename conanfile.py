@@ -15,7 +15,7 @@ class OzoConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     
     # Tag, branch, or full commit SHA
-    _commit = "f5fae17"
+    _commit = "a195031"
     
     def set_version(self):
         short = self._commit[:7] if len(self._commit) > 20 else self._commit
