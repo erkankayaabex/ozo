@@ -7,6 +7,7 @@
 
 #include <boost/hana/for_each.hpp>
 
+#include <cstring>
 #include <istream>
 
 namespace ozo {
@@ -21,11 +22,15 @@ class istream {
         : i_(data), last_(data + len) {}
 
         std::streamsize read(char* buf, std::streamsize n) noexcept {
-            auto last = std::min(i_ + n, last_);
-            std::copy(i_, last, buf);
-            n = std::distance(i_, last);
-            i_ = last;
-            return n;
+            auto const available = std::distance(i_, last_);
+            auto const actual = std::min(n, available);
+            // Use memcpy with explicit size to avoid GCC14 -Wstringop-overflow false positive
+            // that occurs with std::copy when the compiler cannot prove bounds
+            if (actual > 0) {
+                std::memcpy(buf, i_, static_cast<std::size_t>(actual));
+            }
+            i_ += actual;
+            return actual;
         }
     };
 public:
